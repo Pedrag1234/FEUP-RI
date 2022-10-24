@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<launch>
+  <include file="$(find gazebo_ros)/launch/empty_world.launch">
+    <arg name="world_name" value="$(find follow_wall)/worlds/A1.world"/>
+    <arg name="verbose" value="true" />
+  </include>
+
+  <param name="robot_description" command="$(find xacro)/xacro --inorder '$(find follow_wall)/urdf/m2wr.xacro'" />
+    
+    <arg name="x" default="-2"/>
+    <arg name="y" default="-2"/>
+    <arg name="z" default="0.5"/>
+    
+    <node name="mybot_spawn" pkg="gazebo_ros" type="spawn_model" output="screen"
+          args="-urdf -param robot_description -model m2wr -x $(arg x) -y $(arg y) -z $(arg z)" />
+
+</launch>
