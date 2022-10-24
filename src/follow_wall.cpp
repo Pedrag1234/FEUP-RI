@@ -57,6 +57,7 @@ class ReactiveAgent
         float dir_distance[3] = {0.0};
         //float distances[180] = {0.0};
 
+        int rotate_along = 0;
         ros::NodeHandle node;
 
         ros::Subscriber sub;
@@ -67,9 +68,11 @@ class ReactiveAgent
         geometry_msgs::Twist move_Forwards();
         geometry_msgs::Twist move_Backwards();
         geometry_msgs::Twist rotate_Left();
-        geometry_msgs::Twist rotate_right(); 
+        geometry_msgs::Twist rotate_Right(); 
         geometry_msgs::Twist stop();
         geometry_msgs::Twist selectMove();
+        geometry_msgs::Twist move_diagonalLeft();
+        geometry_msgs::Twist move_diagonalRight();
         void updateSensorData(const sensor_msgs::LaserScan::ConstPtr& scan);
 };
 
@@ -114,7 +117,7 @@ geometry_msgs::Twist ReactiveAgent::rotate_Left(){
     return velCommand;
 }
 
-geometry_msgs::Twist ReactiveAgent::rotate_right(){
+geometry_msgs::Twist ReactiveAgent::rotate_Right(){
     geometry_msgs::Twist velCommand;
     velCommand.linear.x = 0.0;
     velCommand.linear.y = 0.0;
@@ -138,9 +141,34 @@ geometry_msgs::Twist ReactiveAgent::stop(){
     return velCommand;
 }
 
+geometry_msgs::Twist ReactiveAgent::move_diagonalLeft(){
+    geometry_msgs::Twist velCommand;
+    velCommand.linear.x = this->linear_s;
+    velCommand.linear.y = 0.0;
+    velCommand.linear.z = 0.0;
+    velCommand.angular.x = 0.0;
+    velCommand.angular.y = 0.0;
+    velCommand.angular.z = -this->angular_s;
+
+    return velCommand;
+}
+        
+geometry_msgs::Twist ReactiveAgent::move_diagonalRight(){
+    geometry_msgs::Twist velCommand;
+    velCommand.linear.x = this->linear_s;
+    velCommand.linear.y = 0.0;
+    velCommand.linear.z = 0.0;
+    velCommand.angular.x = 0.0;
+    velCommand.angular.y = 0.0;
+    velCommand.angular.z = this->angular_s;
+
+    return velCommand;
+}
+
 
 
 geometry_msgs::Twist ReactiveAgent::selectMove(){
+    
     geometry_msgs::Twist velCommand;
     
     switch (state)
@@ -185,8 +213,37 @@ geometry_msgs::Twist ReactiveAgent::selectMove(){
 
     
     case FOLLOW_INNER_WALL:
-        return this->stop();
+        if(this->rotate_along == 0 && this->dir_distance[RIGHT] > 0.6){
+            std::cout << "[FOLLOW_INNER_WALL] : Positioning along the wall\n";
+            velCommand = this->rotate_Right();
+            break;
+        } else if(this->rotate_along == 0){
+            this->rotate_along = 1;
+            std::cout << "[FOLLOW_INNER_WALL] : Starting to move along the wall\n";
+            velCommand = this->move_Forwards();
+            break;
+        }else{
+            if(isinf(this->dir_distance[RIGHT])){
+                std::cout << "[FOLLOW_INNER_WALL] : Reached Wall Edge\n";
+                state = SWITCH_TO_OUTER_WALL;
+                velCommand = this->stop();
+            }
+            else if(this->dir_distance[RIGHT] > 0.6){
+                std::cout << "[FOLLOW_INNER_WALL] : Readjusting to get closer to the wall\n";
+                velCommand = this->move_diagonalLeft();
+                break;
+            }
+            else if (this->dir_distance[RIGHT] < 0.6 || this->dir_distance[FRONT] < 0.6){
+                std::cout << "[FOLLOW_INNER_WALL] : Readjusting to get away from the wall\n";
+                velCommand = this->move_diagonalRight();
+                break;
+            }
+        }
         break;
+
+        case SWITCH_TO_OUTER_WALL:
+            velCommand = this->stop();
+            break;
 
     default:
         std::cout << "[ERROR] : Shouldn't be here\n";
@@ -231,7 +288,7 @@ void ReactiveAgent::run(){
 
         loop_rate.sleep();
 
-        if(state == FOLLOW_INNER_WALL)
+        if(state == SWITCH_TO_OUTER_WALL)
             break;
     }
     
