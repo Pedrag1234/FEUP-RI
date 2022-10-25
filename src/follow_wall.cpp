@@ -1,11 +1,15 @@
 #include <iostream>
 #include <math.h>
 #include <bits/stdc++.h>
+#include <chrono>
+
 
 #include "ros/ros.h" 
 #include "geometry_msgs/Twist.h"
 #include "geometry_msgs/Pose2D.h" 
 #include "sensor_msgs/LaserScan.h"
+
+#define DELTA_TIME 0.1
 
 #define LEFT 0
 #define DIAG_LEFT 1
@@ -23,6 +27,31 @@
 int state = FIND_WALL;
 int edge = 0;
 
+
+//Stats
+int num_iter = 0;
+float distance = 0.0;
+std::chrono::duration<double> elapsed_seconds;
+
+
+void printStatistics(){
+    std::cout << "*************************************************" << std::endl;
+    std::cout << "Aproximate Distance Traveled (m) = " << distance << std::endl;
+    std::cout << "Number of Loop Iterations = " << num_iter << std::endl;
+    std::cout << "Duration Time (s) = " << elapsed_seconds.count() << std::endl;
+    std::cout << "*************************************************" << std::endl;
+}
+
+
+void calculateDistance(float linear_s, float angular_s){
+    if(angular_s != 0 && linear_s != 0){
+        float theta = angular_s * DELTA_TIME;
+        float radius = (linear_s * DELTA_TIME)/theta;
+        distance +=  theta * radius;
+    } else {
+        distance += fabs(DELTA_TIME * linear_s);
+    }
+}
 
 void printState(){
     switch (state)
@@ -345,8 +374,8 @@ void ReactiveAgent::run(){
 
         
         this->pub.publish(velCommand);
-
-
+        calculateDistance(velCommand.linear.x,velCommand.angular.z);
+        num_iter++;
         loop_rate.sleep();
 
         if(state == FINISH)
@@ -364,8 +393,13 @@ int main(int argc, char **argv)
 
     ReactiveAgent agent = ReactiveAgent(0.3,0.3);
 
+    auto start = std::chrono::system_clock::now();
     agent.run();
+    auto end = std::chrono::system_clock::now();
 
+    elapsed_seconds = end-start;
+
+    printStatistics();
     return 0;
 }
 
