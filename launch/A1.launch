@@ -7,7 +7,7 @@
 
   <param name="robot_description" command="$(find xacro)/xacro --inorder '$(find follow_wall)/urdf/m2wr.xacro'" />
     
-    <arg name="x" default="-2"/>
+    <arg name="x" default="0"/>
     <arg name="y" default="-2"/>
     <arg name="z" default="0.5"/>
     

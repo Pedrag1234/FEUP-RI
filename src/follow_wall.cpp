@@ -8,8 +8,10 @@
 #include "sensor_msgs/LaserScan.h"
 
 #define LEFT 0
-#define FRONT 1
-#define RIGHT 2
+#define DIAG_LEFT 1
+#define FRONT 2
+#define DIAG_RIGHT 3
+#define RIGHT 4
 
 #define FIND_WALL 0
 #define GO_TO_WALL 1
@@ -19,6 +21,7 @@
 #define FINISH 5
 
 int state = FIND_WALL;
+int edge = 0;
 
 
 void printState(){
@@ -54,7 +57,7 @@ class ReactiveAgent
     private:
         float linear_s;
         float angular_s;
-        float dir_distance[3] = {0.0};
+        float dir_distance[5] = {0.0};
         //float distances[180] = {0.0};
 
         int rotate_along = 0;
@@ -200,7 +203,7 @@ geometry_msgs::Twist ReactiveAgent::selectMove(){
             break;
         }
 
-        if(this->dir_distance[FRONT] > 0.5){
+        if(this->dir_distance[FRONT] > 0.4){
             std::cout << "[GO_TO_WALL] : Moving Towards Wal\n";
             velCommand = this->move_Forwards();
             break;
@@ -213,37 +216,90 @@ geometry_msgs::Twist ReactiveAgent::selectMove(){
 
     
     case FOLLOW_INNER_WALL:
-        if(this->rotate_along == 0 && this->dir_distance[RIGHT] > 0.6){
+        if(this->rotate_along == 0 && this->dir_distance[RIGHT] > 0.56){
             std::cout << "[FOLLOW_INNER_WALL] : Positioning along the wall\n";
             velCommand = this->rotate_Right();
             break;
         } else if(this->rotate_along == 0){
             this->rotate_along = 1;
             std::cout << "[FOLLOW_INNER_WALL] : Starting to move along the wall\n";
-            velCommand = this->move_Forwards();
+            velCommand = this->stop();
             break;
         }else{
-            if(isinf(this->dir_distance[RIGHT])){
+           if(isinf(this->dir_distance[RIGHT])){
                 std::cout << "[FOLLOW_INNER_WALL] : Reached Wall Edge\n";
                 state = SWITCH_TO_OUTER_WALL;
                 velCommand = this->stop();
             }
-            else if(this->dir_distance[RIGHT] > 0.6){
+            else if(this->dir_distance[RIGHT] > 0.6 && this->dir_distance[DIAG_RIGHT] > 0.6){
                 std::cout << "[FOLLOW_INNER_WALL] : Readjusting to get closer to the wall\n";
-                velCommand = this->move_diagonalLeft();
+                velCommand = this->rotate_Left();
                 break;
             }
-            else if (this->dir_distance[RIGHT] < 0.6 || this->dir_distance[FRONT] < 0.6){
+            else if ((this->dir_distance[RIGHT] < 0.4 && this->dir_distance[RIGHT] > 0.2) || 
+                     (this->dir_distance[FRONT] < 0.4 && this->dir_distance[FRONT] > 0.3)){
+
                 std::cout << "[FOLLOW_INNER_WALL] : Readjusting to get away from the wall\n";
-                velCommand = this->move_diagonalRight();
+                velCommand = this->rotate_Right();
+                break;
+            }
+            else{
+                std::cout << "[FOLLOW_INNER_WALL] : Following wall\n";
+                velCommand = this->move_Forwards();
                 break;
             }
         }
         break;
 
         case SWITCH_TO_OUTER_WALL:
-            velCommand = this->stop();
-            break;
+            if(isinf(this->dir_distance[RIGHT])){
+                std::cout << "[SWITCH_TO_OUTER_WALL] : Repositioning Wall Edge\n";
+                velCommand = this->move_diagonalLeft();
+                edge = 0;
+                break;
+            } else {
+                if(edge == 2){
+                    state = FOLLOW_OUTER_WALL;
+                }
+                edge++;
+                velCommand = this->move_diagonalLeft();
+                break;
+            }
+        
+        break;
+
+        case FOLLOW_OUTER_WALL:
+
+            if(isinf(this->dir_distance[RIGHT])){
+                std::cout << "[FOLLOW_OUTER_WALL] : Reached Finish Edge\n";
+                state = FINISH;
+                velCommand = this->stop();
+            }
+            else if(this->dir_distance[RIGHT] > 0.6 && this->dir_distance[DIAG_RIGHT] > 0.6){
+                std::cout << "[FOLLOW_OUTER_WALL] : Readjusting to get closer to the wall\n";
+                velCommand = this->rotate_Left();
+                break;
+            }
+            else if ((this->dir_distance[RIGHT] < 0.4 && this->dir_distance[RIGHT] > 0.2) || 
+                     (this->dir_distance[FRONT] < 0.4 && this->dir_distance[FRONT] > 0.3)){
+
+                std::cout << "[FOLLOW_OUTER_WALL] : Readjusting to get away from the wall\n";
+                velCommand = this->rotate_Right();
+                break;
+            }
+            else{
+                std::cout << "[FOLLOW_OUTER_WALL] : Following wall\n";
+                velCommand = this->move_Forwards();
+                break;
+            }
+
+
+        break;
+
+
+        case FINISH:
+        velCommand = this->stop();
+        break;
 
     default:
         std::cout << "[ERROR] : Shouldn't be here\n";
@@ -257,12 +313,17 @@ geometry_msgs::Twist ReactiveAgent::selectMove(){
 void ReactiveAgent::updateSensorData(const sensor_msgs::LaserScan::ConstPtr& scan){
     
     this->dir_distance[LEFT] = scan->ranges[0];
+    this->dir_distance[DIAG_LEFT] = scan->ranges[180];
     this->dir_distance[FRONT] = scan->ranges[360];
+    this->dir_distance[DIAG_RIGHT] = scan->ranges[540];
     this->dir_distance[RIGHT] = scan->ranges[719];
 
     std::cout << "[RANGE] left = " << this->dir_distance[LEFT] << "\n";
     std::cout << "[RANGE] front = " << this->dir_distance[FRONT] << "\n";
     std::cout << "[RANGE] right = " << this->dir_distance[RIGHT] << "\n";
+    std::cout << "[RANGE] diag_left = " << this->dir_distance[DIAG_LEFT] << "\n";
+    std::cout << "[RANGE] diag_right = " << this->dir_distance[DIAG_RIGHT] << "\n";
+
 }
 
 void ReactiveAgent::run(){
@@ -288,7 +349,7 @@ void ReactiveAgent::run(){
 
         loop_rate.sleep();
 
-        if(state == SWITCH_TO_OUTER_WALL)
+        if(state == FINISH)
             break;
     }
     
