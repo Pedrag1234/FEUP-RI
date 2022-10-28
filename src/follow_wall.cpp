@@ -19,14 +19,12 @@
 
 #define FIND_WALL 0
 #define GO_TO_WALL 1
-#define FOLLOW_INNER_WALL 2
-#define SWITCH_TO_OUTER_WALL 3
-#define FOLLOW_OUTER_WALL 4
-#define FINISH 5
+#define FOLLOW_WALL 2
+#define CORNERING 3
+#define FINISH 4
 
-int state = FIND_WALL;
-int edge = 0;
-
+int num_edge = 0;
+int isFinished = 0;
 
 //Stats
 int num_iter = 0;
@@ -53,7 +51,7 @@ void calculateDistance(float linear_s, float angular_s){
     }
 }
 
-void printState(){
+void printState(int state){
     switch (state)
     {
     case FIND_WALL:
@@ -62,14 +60,11 @@ void printState(){
     case GO_TO_WALL:
         std::cout << "STATE = GO_TO_WALL\n";
         break;
-    case FOLLOW_INNER_WALL:
-        std::cout << "STATE = FOLLOW_INNER_WALL\n";
+    case FOLLOW_WALL:
+        std::cout << "STATE = FOLLOW_WALL\n";
         break;
-    case SWITCH_TO_OUTER_WALL:
-        std::cout << "STATE = SWITCH_TO_OUTER_WALL\n";
-        break;
-    case FOLLOW_OUTER_WALL:
-        std::cout << "STATE = FOLLOW_OUTER_WALL\n";
+    case CORNERING:
+        std::cout << "STATE = CORNERING\n";
         break;
     case FINISH:
         std::cout << "STATE = FINISH\n";
@@ -86,7 +81,7 @@ class ReactiveAgent
     private:
         float linear_s;
         float angular_s;
-        float dir_distance[5] = {0.0};
+        float dir_distance[5] = {10.0};
         //float distances[180] = {0.0};
 
         int rotate_along = 0;
@@ -202,131 +197,68 @@ geometry_msgs::Twist ReactiveAgent::move_diagonalRight(){
 geometry_msgs::Twist ReactiveAgent::selectMove(){
     
     geometry_msgs::Twist velCommand;
+    int state = -1;
+
+    if((this->dir_distance[RIGHT] < 1.0) || (this->dir_distance[LEFT] < 1.0 )){
+        state = FOLLOW_WALL;
+    } else if(isinf(this->dir_distance[FRONT]) && 
+              isinf(this->dir_distance[RIGHT]) && num_edge == 0) {
+        state = CORNERING;
+    } else if(isinf(this->dir_distance[FRONT]) && 
+              isinf(this->dir_distance[RIGHT]) && num_edge >= 2) {
+        state = FINISH;
+    } else if(isinf(this->dir_distance[FRONT])){
+        state = FIND_WALL;
+    } else {
+        if(this->dir_distance[FRONT] > 0.4)
+            state = GO_TO_WALL;
+        else{
+            state = FOLLOW_WALL;
+        }
+    }
+    std::cout << "------------------Number of edges = " << num_edge << std::endl;
+    printState(state);
     
     switch (state)
     {
     case FIND_WALL:
-        if(this->dir_distance[FRONT] == 0){
-            std::cout << "[FIND_WALL] : Just Started\n";
-            velCommand = this->stop();
-            break;
-        }
-        
-        if(isinf(this->dir_distance[FRONT])){
-            std::cout << "[FIND_WALL] : Rotating to find wall\n";
-            velCommand = this->rotate_Left();
-            break;
-        }
-        
-        std::cout << "[FIND_WALL] : Found Wall\n";
-        state = GO_TO_WALL;
-        velCommand = this->stop();
-        
+        std::cout << "[FIND_WALL] : Readjusting to find wall\n";
+        velCommand = this->rotate_Left();
         break;
 
     case GO_TO_WALL:
+        std::cout << "[GO_TO_WALL] : Moving towards wall\n";
+        velCommand = this->move_Forwards();
+        break;
 
-        if(isinf(this->dir_distance[FRONT])){
-            std::cout << "[GO_TO_WALL] : Rotating to compensate deviation\n";
+    case FOLLOW_WALL:
+        if(this->dir_distance[RIGHT] > 0.6 && this->dir_distance[DIAG_RIGHT] > 0.6){
+            std::cout << "[FOLLOW_WALL] : Readjusting to get closer to the wall\n";
             velCommand = this->rotate_Left();
             break;
-        }
+        } else if ((this->dir_distance[RIGHT] < 0.35 && this->dir_distance[RIGHT] > 0.2) || 
+                   (this->dir_distance[FRONT] < 0.4 && this->dir_distance[FRONT] > 0.3)){
 
-        if(this->dir_distance[FRONT] > 0.4){
-            std::cout << "[GO_TO_WALL] : Moving Towards Wal\n";
+            std::cout << "[FOLLOW_WALL] : Readjusting to get away from the wall\n";
+            velCommand = this->rotate_Right();
+            break;
+        }
+        else{
+            std::cout << "[FOLLOW_WALL] : Following wall\n";
             velCommand = this->move_Forwards();
             break;
         }
-
-        std::cout << "[FIND_WALL] : Reached Wall\n";
-        state = FOLLOW_INNER_WALL;
-        velCommand = this->stop();
         break;
 
-    
-    case FOLLOW_INNER_WALL:
-        if(this->rotate_along == 0 && this->dir_distance[RIGHT] > 0.56){
-            std::cout << "[FOLLOW_INNER_WALL] : Positioning along the wall\n";
-            velCommand = this->rotate_Right();
-            break;
-        } else if(this->rotate_along == 0){
-            this->rotate_along = 1;
-            std::cout << "[FOLLOW_INNER_WALL] : Starting to move along the wall\n";
-            velCommand = this->stop();
-            break;
-        }else{
-           if(isinf(this->dir_distance[RIGHT])){
-                std::cout << "[FOLLOW_INNER_WALL] : Reached Wall Edge\n";
-                state = SWITCH_TO_OUTER_WALL;
-                velCommand = this->stop();
-            }
-            else if(this->dir_distance[RIGHT] > 0.6 && this->dir_distance[DIAG_RIGHT] > 0.6){
-                std::cout << "[FOLLOW_INNER_WALL] : Readjusting to get closer to the wall\n";
-                velCommand = this->rotate_Left();
-                break;
-            }
-            else if ((this->dir_distance[RIGHT] < 0.4 && this->dir_distance[RIGHT] > 0.2) || 
-                     (this->dir_distance[FRONT] < 0.4 && this->dir_distance[FRONT] > 0.3)){
-
-                std::cout << "[FOLLOW_INNER_WALL] : Readjusting to get away from the wall\n";
-                velCommand = this->rotate_Right();
-                break;
-            }
-            else{
-                std::cout << "[FOLLOW_INNER_WALL] : Following wall\n";
-                velCommand = this->move_Forwards();
-                break;
-            }
-        }
+        case CORNERING:
+        std::cout << "[CORNERING] : Driving over the corner\n";
+        num_edge++;
+        velCommand = this->move_diagonalLeft();
         break;
-
-        case SWITCH_TO_OUTER_WALL:
-            if(isinf(this->dir_distance[RIGHT])){
-                std::cout << "[SWITCH_TO_OUTER_WALL] : Repositioning Wall Edge\n";
-                velCommand = this->move_diagonalLeft();
-                edge = 0;
-                break;
-            } else {
-                if(edge == 2){
-                    state = FOLLOW_OUTER_WALL;
-                }
-                edge++;
-                velCommand = this->move_diagonalLeft();
-                break;
-            }
-        
-        break;
-
-        case FOLLOW_OUTER_WALL:
-
-            if(isinf(this->dir_distance[RIGHT])){
-                std::cout << "[FOLLOW_OUTER_WALL] : Reached Finish Edge\n";
-                state = FINISH;
-                velCommand = this->stop();
-            }
-            else if(this->dir_distance[RIGHT] > 0.6 && this->dir_distance[DIAG_RIGHT] > 0.6){
-                std::cout << "[FOLLOW_OUTER_WALL] : Readjusting to get closer to the wall\n";
-                velCommand = this->rotate_Left();
-                break;
-            }
-            else if ((this->dir_distance[RIGHT] < 0.4 && this->dir_distance[RIGHT] > 0.2) || 
-                     (this->dir_distance[FRONT] < 0.4 && this->dir_distance[FRONT] > 0.3)){
-
-                std::cout << "[FOLLOW_OUTER_WALL] : Readjusting to get away from the wall\n";
-                velCommand = this->rotate_Right();
-                break;
-            }
-            else{
-                std::cout << "[FOLLOW_OUTER_WALL] : Following wall\n";
-                velCommand = this->move_Forwards();
-                break;
-            }
-
-
-        break;
-
 
         case FINISH:
+        std::cout << "[FINISHED] : Reached Destination\n";
+        isFinished = 1;
         velCommand = this->stop();
         break;
 
@@ -378,7 +310,7 @@ void ReactiveAgent::run(){
         num_iter++;
         loop_rate.sleep();
 
-        if(state == FINISH)
+        if(isFinished == 1)
             break;
     }
     
