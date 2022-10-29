@@ -202,15 +202,17 @@ geometry_msgs::Twist ReactiveAgent::selectMove(){
     if((this->dir_distance[RIGHT] < 1.0) || (this->dir_distance[LEFT] < 1.0 )){
         state = FOLLOW_WALL;
     } else if(isinf(this->dir_distance[FRONT]) && 
-              isinf(this->dir_distance[RIGHT]) && num_edge == 0) {
+              isinf(this->dir_distance[RIGHT]) && 
+              isinf(this->dir_distance[LEFT]) && num_edge == 0) {
         state = CORNERING;
     } else if(isinf(this->dir_distance[FRONT]) && 
-              isinf(this->dir_distance[RIGHT]) && num_edge >= 2) {
+              isinf(this->dir_distance[RIGHT]) && 
+              isinf(this->dir_distance[LEFT]) && num_edge >= 2) {
         state = FINISH;
     } else if(isinf(this->dir_distance[FRONT])){
         state = FIND_WALL;
     } else {
-        if(this->dir_distance[FRONT] > 0.4)
+        if(this->dir_distance[FRONT] > 0.45)
             state = GO_TO_WALL;
         else{
             state = FOLLOW_WALL;
@@ -233,20 +235,28 @@ geometry_msgs::Twist ReactiveAgent::selectMove(){
 
     case FOLLOW_WALL:
         if(this->dir_distance[RIGHT] > 0.6 && this->dir_distance[DIAG_RIGHT] > 0.6){
+
             if(this->dir_distance[RIGHT] < this->dir_distance[LEFT] && !isinf(this->dir_distance[LEFT])){
+                
                 std::cout << "[FOLLOW_WALL] : Readjusting to get closer to the wall\n";
+                
                 velCommand = this->rotate_Left();
-            } else if(this->dir_distance[RIGHT] > this->dir_distance[LEFT] && !isinf(this->dir_distance[LEFT])){
-                std::cout << "[FOLLOW_WALL] : Readjusting to get closer to the wall\n";
+            } else if((this->dir_distance[RIGHT] > this->dir_distance[LEFT] && !isinf(this->dir_distance[LEFT])) || 
+                      (this->dir_distance[DIAG_RIGHT] > this->dir_distance[DIAG_LEFT] && !isinf(this->dir_distance[DIAG_LEFT]))){
+                
+                std::cout << "[FOLLOW_WALL] : Readjusting to the right get closer to the wall\n";
                 velCommand = this->rotate_Right();
+
             } else{
-                std::cout << "[FOLLOW_WALL] : Readjusting to get closer to the wall\n";
+
+                std::cout << "[FOLLOW_WALL] : Readjusting to the left get closer to the wall\n";
                 velCommand = this->rotate_Left();
+
             }
             
             break;
         } else if ((this->dir_distance[RIGHT] < 0.35 && this->dir_distance[RIGHT] > 0.2) || 
-                   (this->dir_distance[FRONT] < 0.4 && this->dir_distance[FRONT] > 0.3)  ||
+                   (this->dir_distance[FRONT] < 0.45 && this->dir_distance[FRONT] > 0.3)  ||
                    (this->dir_distance[LEFT] < 0.35 && this->dir_distance[LEFT] > 0.2)){
 
             std::cout << "[FOLLOW_WALL] : Readjusting to get away from the wall\n";
