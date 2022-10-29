@@ -233,17 +233,26 @@ geometry_msgs::Twist ReactiveAgent::selectMove(){
 
     case FOLLOW_WALL:
         if(this->dir_distance[RIGHT] > 0.6 && this->dir_distance[DIAG_RIGHT] > 0.6){
-            std::cout << "[FOLLOW_WALL] : Readjusting to get closer to the wall\n";
-            velCommand = this->rotate_Left();
+            if(this->dir_distance[RIGHT] < this->dir_distance[LEFT] && !isinf(this->dir_distance[LEFT])){
+                std::cout << "[FOLLOW_WALL] : Readjusting to get closer to the wall\n";
+                velCommand = this->rotate_Left();
+            } else if(this->dir_distance[RIGHT] > this->dir_distance[LEFT] && !isinf(this->dir_distance[LEFT])){
+                std::cout << "[FOLLOW_WALL] : Readjusting to get closer to the wall\n";
+                velCommand = this->rotate_Right();
+            } else{
+                std::cout << "[FOLLOW_WALL] : Readjusting to get closer to the wall\n";
+                velCommand = this->rotate_Left();
+            }
+            
             break;
         } else if ((this->dir_distance[RIGHT] < 0.35 && this->dir_distance[RIGHT] > 0.2) || 
-                   (this->dir_distance[FRONT] < 0.4 && this->dir_distance[FRONT] > 0.3)){
+                   (this->dir_distance[FRONT] < 0.4 && this->dir_distance[FRONT] > 0.3)  ||
+                   (this->dir_distance[LEFT] < 0.35 && this->dir_distance[LEFT] > 0.2)){
 
             std::cout << "[FOLLOW_WALL] : Readjusting to get away from the wall\n";
             velCommand = this->rotate_Right();
             break;
-        }
-        else{
+        } else {
             std::cout << "[FOLLOW_WALL] : Following wall\n";
             velCommand = this->move_Forwards();
             break;
